@@ -144,6 +144,44 @@ func (s *ReleaseServer) prepareRelease(req *services.InstallReleaseRequest) (*re
 func (s *ReleaseServer) performRelease(r *release.Release, req *services.InstallReleaseRequest, stream services.ReleaseService_InstallReleaseServer) (*services.InstallReleaseResponse, error) {
 	res := &services.InstallReleaseResponse{Release: r}
 
+	watchFeed := &kube.WatchFeedProto{
+		WriteJobLogChunkFunc: func(chunk kube.JobLogChunk) error {
+			chunkResp := &services.InstallReleaseResponse{
+				WatchFeed: &release.WatchFeed{
+					JobLogChunk: &release.JobLogChunk{
+						JobName:       chunk.JobName,
+						PodName:       chunk.PodName,
+						ContainerName: chunk.ContainerName,
+						LogLines:      make([]*release.LogLine, 0),
+					},
+				},
+			}
+
+			for _, line := range chunk.LogLines {
+				ll := &release.LogLine{
+					Timestamp: line.Timestamp,
+					Data:      line.Data,
+				}
+				chunkResp.WatchFeed.JobLogChunk.LogLines = append(chunkResp.WatchFeed.JobLogChunk.LogLines, ll)
+			}
+
+			return stream.Send(chunkResp)
+		},
+		WriteJobPodErrorFunc: func(obj kube.JobPodError) error {
+			chunkResp := &services.InstallReleaseResponse{
+				WatchFeed: &release.WatchFeed{
+					JobPodError: &release.JobPodError{
+						JobName:       obj.JobName,
+						PodName:       obj.PodName,
+						ContainerName: obj.ContainerName,
+						Message:       obj.Message,
+					},
+				},
+			}
+			return stream.Send(chunkResp)
+		},
+	}
+
 	if req.DryRun {
 		s.Log("dry run for %s", r.Name)
 		res.Release.Info.Description = "Dry run complete"
@@ -152,46 +190,6 @@ func (s *ReleaseServer) performRelease(r *release.Release, req *services.Install
 
 	// pre-install hooks
 	if !req.DisableHooks {
-		watchFeed := &kube.WatchFeedProto{
-			WriteJobLogChunkFunc: func(chunk kube.JobLogChunk) error {
-				chunkResp := &services.InstallReleaseResponse{
-					WatchFeed: &release.WatchFeed{
-						JobLogChunk: &release.JobLogChunk{
-							JobName:       chunk.JobName,
-							PodName:       chunk.PodName,
-							ContainerName: chunk.ContainerName,
-							LogLines:      make([]*release.LogLine, 0),
-						},
-					},
-				}
-
-				for _, line := range chunk.LogLines {
-					ll := &release.LogLine{
-						Timestamp: line.Timestamp,
-						Data:      line.Data,
-					}
-					chunkResp.WatchFeed.JobLogChunk.LogLines = append(chunkResp.WatchFeed.JobLogChunk.LogLines, ll)
-				}
-
-				return stream.Send(chunkResp)
-			},
-			WriteJobPodErrorFunc: func(obj kube.JobPodError) error {
-				chunkResp := &services.InstallReleaseResponse{
-					WatchFeed: &release.WatchFeed{
-						JobPodError: &release.JobPodError{
-							JobName:       obj.JobName,
-							PodName:       obj.PodName,
-							ContainerName: obj.ContainerName,
-							Message:       obj.Message,
-						},
-					},
-				}
-				return stream.Send(chunkResp)
-			},
-		}
-
-		// TODO watch job with feed only if job have annotation "helm/watch-logs": "true"
-		// TODO otherwise watch as ordinary hook just like before, using WatchUntilReady
 		if err := s.execHookWithWatchFeed(r.Hooks, r.Name, r.Namespace, hooks.PreInstall, req.Timeout, watchFeed); err != nil {
 			return res, err
 		}
@@ -249,7 +247,7 @@ func (s *ReleaseServer) performRelease(r *release.Release, req *services.Install
 
 	// post-install hooks
 	if !req.DisableHooks {
-		if err := s.execHook(r.Hooks, r.Name, r.Namespace, hooks.PostInstall, req.Timeout); err != nil {
+		if err := s.execHookWithWatchFeed(r.Hooks, r.Name, r.Namespace, hooks.PostInstall, req.Timeout, watchFeed); err != nil {
 			msg := fmt.Sprintf("Release %q failed post-install: %s", r.Name, err)
 			s.Log("warning: %s", msg)
 			r.Info.Status.Code = release.Status_FAILED
