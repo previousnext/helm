@@ -676,7 +676,6 @@
   revision = "53feefa2559fb8dfa8d81baad31be332c97d6c77"
 
 [[projects]]
-  branch = "master"
   name = "k8s.io/api"
   packages = [
     "admission/v1beta1",
@@ -710,7 +709,8 @@
     "storage/v1alpha1",
     "storage/v1beta1"
   ]
-  revision = "b39a8bdff32033fd1f645f17f1625f3b691124b6"
+  revision = "006a217681ae70cbacdd66a5e2fca1a61a8ff28e"
+  version = "kubernetes-1.9.1"
 
 [[projects]]
   name = "k8s.io/apiextensions-apiserver"
@@ -1176,6 +1176,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "78fdfcbcc96f974a75810a22fa07b0c8e463426777d3c5c1aca36318728b893c"
+  inputs-digest = "6154c2f5e056ea0d9a8e5acdadbbd9f1a30d055f9211664d7195c9532e0d8c97"
   solver-name = "gps-cdcl"
   solver-version = 1

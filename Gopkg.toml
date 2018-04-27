@@ -24,8 +24,6 @@
 #   go-tests = true
 #   unused-packages = true
 
-ignored = ["k8s.io/api"]
-
 [[constraint]]
   name = "github.com/BurntSushi/toml"
   version = "0.3.0"
@@ -67,8 +65,8 @@ ignored = ["k8s.io/api"]
   version = "1.7.2"
 
 [[constraint]]
-  branch = "master"
   name = "k8s.io/api"
+  version = "kubernetes-1.9.2"
 
 [[constraint]]
   name = "k8s.io/apimachinery"
